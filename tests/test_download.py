@@ -4,7 +4,7 @@ from unittest.mock import patch
 import polars as pl
 import pytest
 
-from fin_crypto_lab.download import plan_downloads
+from fin_crypto_lab.download import EPOCH_2017_NS, plan_downloads
 from fin_crypto_lab.store import MANIFEST_SCHEMA
 
 
@@ -16,7 +16,7 @@ def test_plan_downloads_fresh_store(tmp_path):
     with patch("fin_crypto_lab.download.get_asset_pairs", return_value=pairs):
         plans = plan_downloads(tmp_path)
     assert len(plans) == 2
-    assert all(p["since"] is None for p in plans)
+    assert all(p["since"] == EPOCH_2017_NS for p in plans)
 
 
 def test_plan_downloads_incremental(tmp_path):
@@ -42,4 +42,4 @@ def test_plan_downloads_incremental(tmp_path):
     xbt = [p for p in plans if p["pair"] == "XBTUSD"][0]
     eth = [p for p in plans if p["pair"] == "ETHUSD"][0]
     assert xbt["since"] == 99999
-    assert eth["since"] is None
+    assert eth["since"] == EPOCH_2017_NS

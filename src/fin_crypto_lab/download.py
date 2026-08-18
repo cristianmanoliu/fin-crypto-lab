@@ -9,6 +9,9 @@ import sys
 import time
 from pathlib import Path
 
+# 2017-01-01 00:00:00 UTC in nanoseconds — Kraken `since` param unit
+EPOCH_2017_NS = 1_483_228_800_000_000_000
+
 from fin_crypto_lab import config
 from fin_crypto_lab.aggregate import trades_to_daily
 from fin_crypto_lab.kraken_client import (
@@ -35,7 +38,7 @@ def plan_downloads(data_dir: Path) -> list[dict]:
         plans.append({
             "pair": altname,
             "kraken_name": info.get("kraken_name", altname),
-            "since": since_map.get(altname),
+            "since": since_map.get(altname, EPOCH_2017_NS),
         })
     return plans
 
