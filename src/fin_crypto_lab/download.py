@@ -9,6 +9,8 @@ import sys
 import time
 from pathlib import Path
 
+import polars as pl
+
 # 2017-01-01 00:00:00 UTC in nanoseconds — Kraken `since` param unit
 EPOCH_2017_NS = 1_483_228_800_000_000_000
 
@@ -70,6 +72,12 @@ def download_pair(
     if df.height == 0:
         log.warning("%s: trades aggregated to 0 daily bars", pair)
         return
+
+    # Merge with existing data on incremental resume
+    existing_path = data_dir / "ohlcv" / f"{pair}.parquet"
+    if existing_path.exists() and since is not None:
+        old = pl.read_parquet(existing_path)
+        df = pl.concat([old, df], how="vertical_relaxed").unique(subset=["date"], keep="last").sort("date")
 
     total_count = len(all_trades)
     write_ohlcv(df, pair, last_trade_id=last or 0,
