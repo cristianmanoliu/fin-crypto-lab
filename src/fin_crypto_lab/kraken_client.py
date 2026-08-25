@@ -1,5 +1,6 @@
 """Thin wrapper around Kraken REST public API. Rate limit: 1 req/sec."""
 import logging
+import time
 from dataclasses import dataclass
 
 import httpx
@@ -8,6 +9,22 @@ log = logging.getLogger("fin_crypto_lab.kraken")
 
 BASE_URL = "https://api.kraken.com"
 RATE_LIMIT_S = 1.1
+_MAX_RETRIES = 5
+_RETRY_BACKOFF = (10, 30, 60, 120, 300)
+
+
+def _get_with_retry(url: str, **kwargs) -> httpx.Response:
+    """GET with exponential backoff on transient network errors."""
+    for attempt in range(_MAX_RETRIES):
+        try:
+            resp = httpx.get(url, **kwargs)
+            resp.raise_for_status()
+            return resp
+        except (httpx.ConnectError, httpx.ReadTimeout, httpx.ConnectTimeout) as exc:
+            wait = _RETRY_BACKOFF[min(attempt, len(_RETRY_BACKOFF) - 1)]
+            log.warning("retry %d/%d in %ds: %s", attempt + 1, _MAX_RETRIES, wait, exc)
+            time.sleep(wait)
+    return httpx.get(url, **kwargs)  # final attempt, let it raise
 
 
 class KrakenError(Exception):
@@ -60,12 +77,39 @@ def _parse_trades(raw: list) -> list[Trade]:
 
 def get_asset_pairs() -> dict[str, dict]:
     """Fetch all USD-quoted asset pairs from Kraken."""
-    resp = httpx.get(f"{BASE_URL}/0/public/AssetPairs", timeout=30)
-    resp.raise_for_status()
+    resp = _get_with_retry(f"{BASE_URL}/0/public/AssetPairs", timeout=30)
     data = resp.json()
     if data.get("error"):
         raise KrakenError(str(data["error"]))
     return _parse_asset_pairs(data["result"])
+
+
+def get_ohlc(
+    pair_kraken_name: str, interval: int = 1440, since: int | None = None,
+) -> list[dict]:
+    """Fetch OHLC candles. interval=1440 = daily. Returns list of dicts
+    with keys: date, open, high, low, close, volume, vwap, trade_count."""
+    import datetime as _dt
+    params: dict = {"pair": pair_kraken_name, "interval": interval}
+    if since is not None:
+        params["since"] = str(since)
+    resp = _get_with_retry(f"{BASE_URL}/0/public/OHLC",
+                           params=params, timeout=30)
+    data = resp.json()
+    if data.get("error"):
+        raise KrakenError(str(data["error"]))
+    result = data["result"]
+    candles = [v for k, v in result.items() if k != "last"][0]
+    rows = []
+    for c in candles:
+        ts, o, h, lo, cl, vwap, vol, count = c
+        rows.append({
+            "date": _dt.date.fromtimestamp(int(ts)),
+            "open": float(o), "high": float(h), "low": float(lo),
+            "close": float(cl), "volume": float(vol), "vwap": float(vwap),
+            "trade_count": int(count),
+        })
+    return rows
 
 
 def get_trades(
@@ -76,9 +120,8 @@ def get_trades(
     params: dict = {"pair": pair_kraken_name}
     if since is not None:
         params["since"] = str(since)
-    resp = httpx.get(f"{BASE_URL}/0/public/Trades",
-                     params=params, timeout=30)
-    resp.raise_for_status()
+    resp = _get_with_retry(f"{BASE_URL}/0/public/Trades",
+                           params=params, timeout=30)
     data = resp.json()
     if data.get("error"):
         raise KrakenError(str(data["error"]))
