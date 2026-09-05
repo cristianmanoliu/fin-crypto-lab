@@ -123,7 +123,7 @@ def _flush(pair: str, trades: list[Trade], last_id: int, data_dir: Path) -> None
     existing_path = data_dir / "ohlcv" / f"{pair}.parquet"
     if existing_path.exists():
         old = pl.read_parquet(existing_path)
-        df = pl.concat([old, df], how="vertical_relaxed").unique(
+        df = pl.concat([old.select(df.columns), df], how="vertical_relaxed").unique(
             subset=["date"], keep="last"
         ).sort("date")
     write_ohlcv(df, pair, last_trade_id=last_id or 0,
