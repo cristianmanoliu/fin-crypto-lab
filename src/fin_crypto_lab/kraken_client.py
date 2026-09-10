@@ -49,8 +49,8 @@ def _parse_asset_pairs(raw: dict) -> dict[str, dict]:
         if quote not in ("ZUSD", "USD"):
             continue
         altname = info["altname"]
-        fees = info.get("fees", [[0, 0.26]])
-        fees_maker = info.get("fees_maker", [[0, 0.16]])
+        fees = info.get("fees") or [[0, 0.26]]
+        fees_maker = info.get("fees_maker") or [[0, 0.16]]
         out[altname] = {
             "kraken_name": key,
             "base": info.get("base", ""),
