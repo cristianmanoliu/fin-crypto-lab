@@ -18,7 +18,7 @@ from fin_crypto_lab.metrics_overfit import (
     sharpe_moments,
 )
 from fin_crypto_lab.panel import build_panel, crypto_sessions, weekly_formations
-from fin_crypto_lab.signals import momentum
+from fin_crypto_lab.signals import momentum, residual_momentum
 from fin_crypto_lab.sweep import (
     GRID,
     THRESHOLDS,
@@ -77,8 +77,11 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--instrument", required=True,
                         choices=["spot", "futures"])
+    parser.add_argument("--signal", default="momentum",
+                        choices=["momentum", "residual"])
     args = parser.parse_args()
     instrument = args.instrument
+    signal_type = args.signal
 
     data_dir = (config.SPOT_DATA_DIR if instrument == "spot"
                 else config.FUTURES_DATA_DIR)
@@ -89,11 +92,20 @@ def main() -> int:
     decision_slip = (config.SPOT_DECISION_SLIP_BP if instrument == "spot"
                      else config.FUTURES_DECISION_SLIP_BP)
 
+    if instrument == "futures":
+        form_start = config.FUTURES_FORM_START
+        form_end = config.FUTURES_FORM_END
+        train_end = config.FUTURES_TRAIN_END
+    else:
+        form_start = config.FORM_START
+        form_end = config.FORM_END
+        train_end = config.TRAIN_END
+
     sessions = crypto_sessions(
-        str(config.FORM_START - dt.timedelta(days=400)),
-        str(config.FORM_END))
+        str(form_start - dt.timedelta(days=400)),
+        str(form_end))
     formations = [d for d in weekly_formations(sessions)
-                  if config.FORM_START <= d <= config.FORM_END]
+                  if form_start <= d <= form_end]
 
     ohlcv_dir = data_dir / "ohlcv"
     inst_grid = [g for g in GRID if g["instrument"] == instrument]
@@ -109,14 +121,28 @@ def main() -> int:
 
     lb = inst_grid[0]["lookback"]
     sk = inst_grid[0]["skip"]
+
+    market_col = None
+    if signal_type == "residual":
+        for mkt_sym in ("XBTUSD", "BTCUSD"):
+            if mkt_sym in symbols:
+                market_col = symbols.index(mkt_sym)
+                break
+        log.info("residual momentum: market_col=%s (%s)",
+                 market_col, symbols[market_col] if market_col is not None else "EW")
+
     sig_by_form: dict[dt.date, dict[str, float]] = {}
     for d in formations:
         fi = f_idx[d]
         if fi < lb:
             continue
-        raw = momentum(panel, fi, lookback=lb, skip=sk)
+        if signal_type == "residual":
+            raw = residual_momentum(panel, fi, lookback=lb, skip=sk,
+                                    market_col=market_col)
+        else:
+            raw = momentum(panel, fi, lookback=lb, skip=sk)
         sig_by_form[d] = dict(zip(panel.symbols, raw.tolist()))
-    log.info("momentum signal computed for %d formations", len(sig_by_form))
+    log.info("%s signal computed for %d formations", signal_type, len(sig_by_form))
 
     bm_targets = benchmark_targets(universe, formations)
     bm_sw = slippage_sweep(panel, bm_targets, nav0=config.NAV_DEFAULT,
@@ -127,7 +153,7 @@ def main() -> int:
         pl.col("date").is_in(formations)).sort("date")
     bm_dates = bm_marks["date"].to_list()[1:]
     bm_test = [r for r, d in zip(bm_weekly, bm_dates)
-               if d > config.TRAIN_END]
+               if d > train_end]
 
     rows, weekly_own = [], {}
     results_cache: dict[str, dict] = {}
@@ -151,9 +177,9 @@ def main() -> int:
             pl.col("date").is_in(formations)).sort("date")
         dates = marks["date"].to_list()[1:]
         train = [r for r, d in zip(cfg_weekly, dates)
-                 if d <= config.TRAIN_END]
+                 if d <= train_end]
         test = [r for r, d in zip(cfg_weekly, dates)
-                if d > config.TRAIN_END]
+                if d > train_end]
         n_days = res.nav.height - 1
 
         names_per_form = (
@@ -199,7 +225,7 @@ def main() -> int:
     sel_sw = cached["sw"]
     sel_tgt = cached["tgt"]
 
-    sel_nav_test = sel_res.nav.filter(pl.col("date") > config.TRAIN_END)
+    sel_nav_test = sel_res.nav.filter(pl.col("date") > train_end)
     nav_s = sel_nav_test["nav"]
     test_dd = float(-(nav_s / nav_s.cum_max() - 1.0).min())
 
@@ -253,7 +279,8 @@ def main() -> int:
     kills = [c for c in checks if c[0].startswith("KC") and not c[1]]
     family_pass = all(passed for _, passed, _ in checks)
 
-    label = (f"crypto_{instrument}_momentum_"
+    sig_label = "momentum" if signal_type == "momentum" else "resmom"
+    label = (f"crypto_{instrument}_{sig_label}_"
              f"{dt.date.today().isoformat()}")
     out = write_verdict(
         rows, checks, family_pass,

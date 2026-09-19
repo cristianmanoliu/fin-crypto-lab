@@ -8,6 +8,7 @@ import httpx
 log = logging.getLogger("fin_crypto_lab.kraken")
 
 BASE_URL = "https://api.kraken.com"
+FUTURES_BASE_URL = "https://futures.kraken.com"
 RATE_LIMIT_S = 1.1
 _MAX_RETRIES = 5
 _RETRY_BACKOFF = (10, 30, 60, 120, 300)
@@ -129,3 +130,56 @@ def get_trades(
     last = int(result.get("last", 0))
     trade_data = [v for k, v in result.items() if k != "last"][0]
     return _parse_trades(trade_data), last
+
+
+# --- Futures API (futures.kraken.com) ---
+
+
+def get_futures_instruments() -> dict[str, dict]:
+    """Fetch all USD-quoted perpetual futures instruments.
+    Returns {altname: {symbol, base, quote, openingDate, ...}}."""
+    resp = _get_with_retry(
+        f"{FUTURES_BASE_URL}/derivatives/api/v3/instruments", timeout=30)
+    data = resp.json()
+    if data.get("result") != "success":
+        raise KrakenError(str(data))
+    out = {}
+    for inst in data["instruments"]:
+        sym = inst["symbol"]
+        if not sym.startswith("PF_") or inst.get("quote") != "USD":
+            continue
+        if not inst.get("tradeable", False):
+            continue
+        base = inst.get("base", "")
+        altname = f"{base}USD"
+        out[altname] = {
+            "futures_symbol": sym,
+            "base": base,
+            "quote": "USD",
+            "openingDate": inst.get("openingDate", ""),
+        }
+    return out
+
+
+def get_futures_ohlc(futures_symbol: str) -> list[dict]:
+    """Fetch full daily OHLCV history for a perpetual futures instrument.
+    Returns list of dicts with keys: date, open, high, low, close, volume."""
+    import datetime as _dt
+    resp = _get_with_retry(
+        f"{FUTURES_BASE_URL}/api/charts/v1/trade/{futures_symbol}/1d",
+        timeout=30)
+    data = resp.json()
+    candles = data.get("candles", [])
+    rows = []
+    for c in candles:
+        rows.append({
+            "date": _dt.date.fromtimestamp(int(c["time"]) // 1000),
+            "open": float(c["open"]),
+            "high": float(c["high"]),
+            "low": float(c["low"]),
+            "close": float(c["close"]),
+            "volume": float(c["volume"]),
+            "vwap": float(c["close"]),
+            "trade_count": 0,
+        })
+    return rows

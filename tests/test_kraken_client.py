@@ -45,3 +45,30 @@ def test_parse_trades():
 
 def test_parse_trades_empty():
     assert _parse_trades([]) == []
+
+
+def test_parse_futures_ohlc_row():
+    """Verify get_futures_ohlc returns the right schema from raw candle data."""
+    from fin_crypto_lab.kraken_client import get_futures_ohlc
+    from unittest.mock import patch
+    import httpx
+
+    fake_response = httpx.Response(200, json={
+        "candles": [
+            {"time": 1647993600000, "open": "42175", "high": "43035",
+             "low": "41969", "close": "42912", "volume": "62.16"},
+        ],
+        "more_candles": False,
+    })
+
+    with patch("fin_crypto_lab.kraken_client._get_with_retry",
+               return_value=fake_response):
+        rows = get_futures_ohlc("PF_XBTUSD")
+
+    assert len(rows) == 1
+    r = rows[0]
+    assert r["open"] == 42175.0
+    assert r["close"] == 42912.0
+    assert r["volume"] == 62.16
+    import datetime as dt
+    assert r["date"] == dt.date(2022, 3, 23)

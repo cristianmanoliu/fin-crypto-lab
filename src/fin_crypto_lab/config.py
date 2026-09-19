@@ -22,10 +22,15 @@ FUTURES_SLIP_LEVELS_BP = (0.0, 5.0, 10.0, 20.0)
 SPOT_DECISION_SLIP_BP = 160.0
 FUTURES_DECISION_SLIP_BP = 10.0
 
-# Train/test split
+# Train/test split (spot: 2017-2022 train, 2022-2026 test)
 TRAIN_END = dt.date(2022, 6, 30)
 FORM_START = dt.date(2017, 1, 1)
 FORM_END = dt.date(2026, 4, 30)
+
+# Futures split (perps launched 2022-03; shorter history)
+FUTURES_FORM_START = dt.date(2022, 3, 27)
+FUTURES_TRAIN_END = dt.date(2024, 6, 30)
+FUTURES_FORM_END = dt.date(2026, 9, 14)
 
 
 def spot_cost_frac(notional: float) -> float:

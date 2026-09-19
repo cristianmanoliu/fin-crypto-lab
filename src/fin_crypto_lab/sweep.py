@@ -6,8 +6,10 @@ import numpy as np
 import polars as pl
 
 GRID = [
-    {"instrument": inst, "top_n": n, "lookback": 365, "skip": 7}
-    for inst in ("spot", "futures")
+    {"instrument": "spot", "top_n": n, "lookback": 365, "skip": 7}
+    for n in (10, 20, 30)
+] + [
+    {"instrument": "futures", "top_n": n, "lookback": 90, "skip": 7}
     for n in (10, 20, 30)
 ]
 

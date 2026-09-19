@@ -20,6 +20,8 @@ from fin_crypto_lab.kraken_client import (
     KrakenError,
     Trade,
     get_asset_pairs,
+    get_futures_instruments,
+    get_futures_ohlc,
     get_ohlc,
     get_trades,
     RATE_LIMIT_S,
@@ -144,6 +146,32 @@ def download_pair_fast(pair: str, kraken_name: str, data_dir: Path) -> None:
     log.info("%s: %d days (fast/OHLC)", pair, df.height)
 
 
+def download_futures(data_dir: Path, top: int | None = None) -> int:
+    """Download all perpetual futures OHLCV via the futures API.
+    One call per pair (full history in a single response)."""
+    instruments = get_futures_instruments()
+    log.info("futures: %d USD perpetuals found", len(instruments))
+    errors = 0
+    for i, (altname, info) in enumerate(sorted(instruments.items()), 1):
+        log.info("[%d/%d] %s (%s)", i, len(instruments), altname,
+                 info["futures_symbol"])
+        try:
+            rows = get_futures_ohlc(info["futures_symbol"])
+            if not rows:
+                log.warning("%s: no candles", altname)
+                continue
+            df = pl.DataFrame(rows).cast({"trade_count": pl.Int64})
+            write_ohlcv(df, altname, last_trade_id=0,
+                        trade_count=int(df["trade_count"].sum()),
+                        data_dir=data_dir)
+            log.info("%s: %d days", altname, df.height)
+        except Exception:
+            log.exception("FAILED: %s", altname)
+            errors += 1
+        time.sleep(RATE_LIMIT_S)
+    return errors
+
+
 def main() -> int:
     logging.basicConfig(level=logging.INFO,
                         format="%(asctime)s %(levelname)s %(message)s")
@@ -151,9 +179,16 @@ def main() -> int:
     parser.add_argument("--data-dir", type=Path, default=config.SPOT_DATA_DIR)
     parser.add_argument("--fast", action="store_true",
                         help="Use /public/OHLC (1 call/pair) instead of /public/Trades")
+    parser.add_argument("--futures", action="store_true",
+                        help="Download perpetual futures from futures.kraken.com")
     parser.add_argument("--top", type=int, default=None,
                         help="Only download the top-N pairs by USD volume")
     args = parser.parse_args()
+
+    if args.futures:
+        data_dir = args.data_dir if args.data_dir != config.SPOT_DATA_DIR else config.FUTURES_DATA_DIR
+        errors = download_futures(data_dir, top=args.top)
+        return 1 if errors else 0
 
     plans = plan_downloads(args.data_dir, top=args.top)
     log.info("downloading %d pairs to %s%s", len(plans), args.data_dir,
