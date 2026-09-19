@@ -18,7 +18,7 @@ from fin_crypto_lab.metrics_overfit import (
     sharpe_moments,
 )
 from fin_crypto_lab.panel import build_panel, crypto_sessions, weekly_formations
-from fin_crypto_lab.signals import momentum, residual_momentum
+from fin_crypto_lab import signals as sig_mod
 from fin_crypto_lab.sweep import (
     GRID,
     THRESHOLDS,
@@ -33,14 +33,54 @@ from fin_crypto_lab.universe import build_universe
 
 log = logging.getLogger("fin_crypto_lab.sweep")
 
+SIGNAL_CHOICES = [
+    "momentum", "residual", "volwt", "highprox", "reversal",
+    "voladj", "accel", "lowvol", "voltrend", "meanrev",
+]
+
+SIGNAL_LABELS = {
+    "momentum": "momentum", "residual": "resmom", "volwt": "volwt",
+    "highprox": "highprox", "reversal": "reversal", "voladj": "voladj",
+    "accel": "accel", "lowvol": "lowvol", "voltrend": "voltrend",
+    "meanrev": "meanrev",
+}
+
+
+def compute_signal(signal_type: str, panel, fi: int, lb: int, sk: int,
+                   market_col: int | None) -> np.ndarray:
+    match signal_type:
+        case "momentum":
+            return sig_mod.momentum(panel, fi, lookback=lb, skip=sk)
+        case "residual":
+            return sig_mod.residual_momentum(panel, fi, lookback=lb, skip=sk,
+                                             market_col=market_col)
+        case "volwt":
+            return sig_mod.volume_weighted_momentum(panel, fi, lookback=lb, skip=sk)
+        case "highprox":
+            return sig_mod.high_proximity(panel, fi, lookback=lb, skip=sk)
+        case "reversal":
+            return sig_mod.short_term_reversal(panel, fi, lookback=lb, skip=sk)
+        case "voladj":
+            return sig_mod.vol_adjusted_momentum(panel, fi, lookback=lb, skip=sk)
+        case "accel":
+            return sig_mod.acceleration(panel, fi, lookback=lb, skip=sk)
+        case "lowvol":
+            return sig_mod.low_volatility(panel, fi, lookback=lb, skip=sk)
+        case "voltrend":
+            return sig_mod.volume_trend(panel, fi, lookback=lb, skip=sk)
+        case "meanrev":
+            return sig_mod.mean_reversion(panel, fi, lookback=lb, skip=sk)
+        case _:
+            raise ValueError(f"unknown signal: {signal_type}")
+
 
 def write_verdict(rows, checks, family_pass, extra, run_label,
                   results_dir: Path = config.RESULTS_DIR) -> Path:
     out_dir = results_dir / run_label
     out_dir.mkdir(parents=True, exist_ok=True)
     lines = [
-        f"# Crypto {extra.get('instrument', '')} momentum verdict "
-        f"({dt.date.today()})",
+        f"# Crypto {extra.get('instrument', '')} {extra.get('signal', 'momentum')} "
+        f"verdict ({dt.date.today()})",
         "",
         f"## FAMILY: {'PASS' if family_pass else 'FAIL'}",
         "",
@@ -78,7 +118,7 @@ def main() -> int:
     parser.add_argument("--instrument", required=True,
                         choices=["spot", "futures"])
     parser.add_argument("--signal", default="momentum",
-                        choices=["momentum", "residual"])
+                        choices=SIGNAL_CHOICES)
     args = parser.parse_args()
     instrument = args.instrument
     signal_type = args.signal
@@ -136,11 +176,7 @@ def main() -> int:
         fi = f_idx[d]
         if fi < lb:
             continue
-        if signal_type == "residual":
-            raw = residual_momentum(panel, fi, lookback=lb, skip=sk,
-                                    market_col=market_col)
-        else:
-            raw = momentum(panel, fi, lookback=lb, skip=sk)
+        raw = compute_signal(signal_type, panel, fi, lb, sk, market_col)
         sig_by_form[d] = dict(zip(panel.symbols, raw.tolist()))
     log.info("%s signal computed for %d formations", signal_type, len(sig_by_form))
 
@@ -279,13 +315,13 @@ def main() -> int:
     kills = [c for c in checks if c[0].startswith("KC") and not c[1]]
     family_pass = all(passed for _, passed, _ in checks)
 
-    sig_label = "momentum" if signal_type == "momentum" else "resmom"
+    sig_label = SIGNAL_LABELS[signal_type]
     label = (f"crypto_{instrument}_{sig_label}_"
              f"{dt.date.today().isoformat()}")
     out = write_verdict(
         rows, checks, family_pass,
         {"selected": sel["name"], "dsr": dsr, "pbo": pbo,
-         "instrument": instrument},
+         "instrument": instrument, "signal": sig_label},
         run_label=label,
     )
     for cid, passed, meas in checks:

@@ -5,7 +5,11 @@ import polars as pl
 import pytest
 
 from fin_crypto_lab.panel import Panel
-from fin_crypto_lab.signals import momentum, residual_momentum
+from fin_crypto_lab.signals import (
+    acceleration, high_proximity, low_volatility, mean_reversion,
+    momentum, residual_momentum, short_term_reversal,
+    vol_adjusted_momentum, volume_trend, volume_weighted_momentum,
+)
 
 
 def _make_panel(n_days=400, n_syms=2):
@@ -14,9 +18,10 @@ def _make_panel(n_days=400, n_syms=2):
                              eager=True)
     close = np.ones((n_days, n_syms)) * 100.0
     close[:, 0] = np.linspace(50.0, 100.0, n_days)
+    close[:, 1] = np.linspace(100.0, 105.0, n_days)
     return Panel(
         sessions=sessions, symbols=[f"SYM{i}" for i in range(n_syms)],
-        open=close.copy(), high=close.copy(), low=close.copy(),
+        open=close.copy(), high=close.copy() * 1.01, low=close.copy() * 0.99,
         close=close.copy(), close_ff=close.copy(),
         volume=np.ones((n_days, n_syms)) * 100.0,
         vwap=close.copy(),
@@ -29,7 +34,7 @@ def test_momentum_basic():
     m = momentum(p, f_idx=399, lookback=365, skip=7)
     assert m.shape == (2,)
     assert m[0] > 0
-    assert abs(m[1]) < 0.01
+    assert m[1] < m[0]
 
 
 def test_momentum_too_early():
@@ -46,7 +51,6 @@ def test_residual_momentum_returns_finite():
 
 
 def test_residual_momentum_strips_market():
-    """A symbol perfectly correlated with market should have ~zero residual."""
     n = 400
     rng = np.random.default_rng(42)
     market_prices = 100 * np.exp(np.cumsum(rng.normal(0.001, 0.02, n)))
@@ -60,10 +64,35 @@ def test_residual_momentum_strips_market():
                              eager=True)
     p = Panel(
         sessions=sessions, symbols=["MKT", "CLONE", "INDEP"],
-        open=close.copy(), high=close.copy(), low=close.copy(),
+        open=close.copy(), high=close.copy() * 1.01, low=close.copy() * 0.99,
         close=close.copy(), close_ff=close.copy(),
         volume=np.ones_like(close) * 100.0, vwap=close.copy(),
         tradable=np.ones_like(close, dtype=bool),
     )
     r = residual_momentum(p, f_idx=399, lookback=365, skip=7, market_col=0)
     assert abs(r[1]) < abs(r[2]) or abs(r[1]) < 0.5
+
+
+@pytest.mark.parametrize("signal_fn", [
+    volume_weighted_momentum, high_proximity, vol_adjusted_momentum,
+    acceleration, low_volatility, volume_trend, mean_reversion,
+])
+def test_signal_shape_and_finite(signal_fn):
+    p = _make_panel()
+    out = signal_fn(p, f_idx=399, lookback=365, skip=7)
+    assert out.shape == (2,)
+    assert np.isfinite(out).all()
+
+
+def test_short_term_reversal_shape():
+    p = _make_panel()
+    out = short_term_reversal(p, f_idx=399, lookback=365, skip=7)
+    assert out.shape == (2,)
+    assert np.isfinite(out).all()
+
+
+def test_high_proximity_bounded():
+    p = _make_panel()
+    out = high_proximity(p, f_idx=399, lookback=365, skip=7)
+    assert (out <= 1.0 + 1e-9).all()
+    assert (out > 0).all()
