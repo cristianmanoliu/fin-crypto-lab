@@ -67,6 +67,13 @@ def test_topn_targets_falls_back_to_latest_snap():
     assert tgt.height == 2
 
 
+def test_topn_targets_skips_thin_formations():
+    univ = _universe()
+    sig = {dt.date(2024, 1, 7): {"A": 0.5, "B": 0.3, "C": 0.1}}
+    tgt = topn_targets(sig, univ, n=10, min_names=5)
+    assert tgt.height == 0
+
+
 def test_topn_targets_empty_on_no_signal():
     univ = _universe()
     tgt = topn_targets({}, univ, n=2)

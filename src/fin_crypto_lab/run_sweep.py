@@ -134,7 +134,8 @@ def main() -> int:
     nonfinite = False
     for g in inst_grid:
         name = config_name(g)
-        tgt = topn_targets(sig_by_form, universe, n=g["top_n"])
+        tgt = topn_targets(sig_by_form, universe, n=g["top_n"],
+                          min_names=THRESHOLDS["KC6_MIN_NAMES"])
         sw = slippage_sweep(panel, tgt, nav0=config.NAV_DEFAULT,
                             slip_levels=slip_levels, cost_frac_fn=cost_fn)
         res = sw[decision_slip]

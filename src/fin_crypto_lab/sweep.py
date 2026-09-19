@@ -33,9 +33,10 @@ def topn_targets(
     signal_by_formation: dict[dt.date, dict[str, float]],
     universe: pl.DataFrame,
     n: int,
+    min_names: int = 0,
 ) -> pl.DataFrame:
     """Long-only top-N by signal among universe members.
-    Sort (signal DESC, symbol ASC); fewer than n eligible -> hold all."""
+    Sort (signal DESC, symbol ASC); skip formation if fewer than min_names eligible."""
     rows = []
     for f_date in sorted(signal_by_formation):
         snap = universe.filter(pl.col("snapshot_date") == f_date)
@@ -52,7 +53,7 @@ def topn_targets(
             key=lambda t: (-t[0], t[1]),
         )
         chosen = [s for _, s in eligible[:n]]
-        if not chosen:
+        if len(chosen) < max(min_names, 1):
             continue
         w = 1.0 / len(chosen)
         rows += [{"formation_date": f_date, "symbol": s, "weight": w}
