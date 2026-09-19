@@ -1,4 +1,4 @@
-# Crypto futures momentum verdict (2026-09-19)
+# Crypto futures resmom verdict (2026-09-19)
 
 ## FAMILY: FAIL
 
