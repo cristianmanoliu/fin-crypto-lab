@@ -85,7 +85,8 @@ def write_verdict(rows, checks, family_pass, extra, run_label,
         f"## FAMILY: {'PASS' if family_pass else 'FAIL'}",
         "",
         f"Selected: **{extra['selected']}** "
-        f"(DSR {extra['dsr']:.3f}, PBO {extra['pbo']:.3f})",
+        f"(DSR {extra['dsr']:.3f} at n_trials={extra['n_trials']}, "
+        f"PBO {extra['pbo']:.3f})",
         "",
         "| check | result | measured |",
         "|---|---|---|",
@@ -250,8 +251,10 @@ def main() -> int:
               np.std(np.asarray(weekly_own[r["name"]]), ddof=1))
         for r in rows
     ]
+    n_trials = THRESHOLDS["N_TRIALS"]
     dsr = deflated_sharpe_ratio(sr_hat=sr, t_obs=len(own_sel), skew=skew,
-                                kurt=kurt, trial_sharpes=trial_srs)
+                                kurt=kurt, trial_sharpes=trial_srs,
+                                n_trials=n_trials)
 
     matrix = np.column_stack([weekly_own[r["name"]] for r in rows])
     pbo = pbo_cscv(matrix, s_blocks=THRESHOLDS["S_BLOCKS"])
@@ -292,7 +295,8 @@ def main() -> int:
     checks = [
         ("PC-1", sel["test_sharpe"] >= bm_test_sharpe,
          f"{sel['test_sharpe']:.2f} vs benchmark {bm_test_sharpe:.2f}"),
-        ("PC-3", dsr >= THRESHOLDS["DSR_MIN"], f"DSR {dsr:.3f}"),
+        ("PC-3", dsr >= THRESHOLDS["DSR_MIN"],
+         f"DSR {dsr:.3f} (n_trials={n_trials})"),
         ("PC-4", pbo <= THRESHOLDS["PBO_MAX"], f"PBO {pbo:.3f}"),
         ("PC-5", recon_err <= THRESHOLDS["COST_RECON_TOL"],
          f"drag {drag:.2%} vs costs {costs_frac:.2%} "
@@ -321,6 +325,7 @@ def main() -> int:
     out = write_verdict(
         rows, checks, family_pass,
         {"selected": sel["name"], "dsr": dsr, "pbo": pbo,
+         "n_trials": n_trials,
          "instrument": instrument, "signal": sig_label},
         run_label=label,
     )

@@ -23,7 +23,9 @@ THRESHOLDS = {
     "KC5_WEIGHT_TOL": 0.001,
     "KC6_MIN_NAMES": 5,
     "S_BLOCKS": 16,
-    "N_TRIALS": 6,
+    # cumulative trials on this dataset; ledger in
+    # results/crypto_spot_momentum_deep_decision_rule_2026-09-23.md
+    "N_TRIALS": 69,
 }
 
 

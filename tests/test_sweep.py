@@ -32,6 +32,11 @@ def test_config_name_format():
     assert config_name(g) == "spot_mom_top20"
 
 
+def test_n_trials_matches_locked_ledger():
+    # results/crypto_spot_momentum_deep_decision_rule_2026-09-23.md
+    assert THRESHOLDS["N_TRIALS"] == 69
+
+
 def test_thresholds_present():
     for key in ("DSR_MIN", "PBO_MAX", "COST_RECON_TOL", "KC1_MAX_CAGR",
                 "KC2_MAX_TURNOVER", "KC4_MAX_DD", "KC5_WEIGHT_TOL",

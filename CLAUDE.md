@@ -43,6 +43,8 @@ Python 3.12+, polars, numpy, httpx, pytest. uv-managed. No `exchange_calendars` 
   - Futures: 2022-03-27 to 2024-06-30 / 2024-07-01 to 2026-09-14 (perps launched 2022-03).
 - **Grid:** 6 configs (spot top-10/20/30 at lookback=365, futures top-10/20/30 at lookback=90).
 - **`metrics_overfit.py` is a verbatim copy** from fin-equity-lab. Do not modify.
+- **DSR deflates at `THRESHOLDS["N_TRIALS"]`, the cumulative trial count on this dataset (69 as of 2026-09-23).** Every new run adds its configs to the ledger in the current pre-reg under `results/` before it starts. The 2026-09-19 verdicts deflated at N = 3 on a panel with a six-year XBTUSD hole and are not evidence (`docs/findings/2026-09-23-crypto-verdicts-n3-and-xbt-hole.md`).
+- **A trade checkpoint is not completion.** Gate on the checkpoint date decoded from `last_trade_id` plus a gap scan: `uv run python scripts/check_top60_complete.py`.
 
 ## Architecture
 

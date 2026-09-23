@@ -36,7 +36,7 @@ def test_write_verdict_creates_file(tmp_path):
         ("KC-1", True, "max full CAGR 18.00%"),
     ]
     extra = {"selected": "spot_mom_top10", "dsr": 0.95, "pbo": 0.20,
-             "instrument": "spot"}
+             "n_trials": 69, "instrument": "spot"}
     out = write_verdict(rows, checks, family_pass=True, extra=extra,
                         run_label="test_run", results_dir=tmp_path)
     verdict_file = out / "verdict.md"
@@ -45,6 +45,15 @@ def test_write_verdict_creates_file(tmp_path):
     assert "FAMILY: PASS" in text
     assert "spot_mom_top10" in text
     assert "PC-1" in text
+    assert "n_trials=69" in text
+
+
+def test_runner_deflates_at_fixture_n_trials():
+    # writer-equals-fixture: the runner must not derive N from the grid size
+    import inspect
+    from fin_crypto_lab import run_sweep
+    src = inspect.getsource(run_sweep.main)
+    assert 'n_trials=n_trials' in src and 'THRESHOLDS["N_TRIALS"]' in src
 
 
 def test_write_verdict_fail(tmp_path):
@@ -65,7 +74,7 @@ def test_write_verdict_fail(tmp_path):
         ("PC-1", False, "0.30 vs benchmark 0.50"),
     ]
     extra = {"selected": "futures_mom_top10", "dsr": 0.70, "pbo": 0.60,
-             "instrument": "futures"}
+             "n_trials": 69, "instrument": "futures"}
     out = write_verdict(rows, checks, family_pass=False, extra=extra,
                         run_label="test_fail", results_dir=tmp_path)
     text = (out / "verdict.md").read_text()
