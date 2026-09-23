@@ -21,7 +21,7 @@ def _get_with_retry(url: str, **kwargs) -> httpx.Response:
             resp = httpx.get(url, **kwargs)
             resp.raise_for_status()
             return resp
-        except (httpx.ConnectError, httpx.ReadTimeout, httpx.ConnectTimeout) as exc:
+        except httpx.TransportError as exc:  # covers RemoteProtocolError too, which killed XRPUSD 2026-09-23
             wait = _RETRY_BACKOFF[min(attempt, len(_RETRY_BACKOFF) - 1)]
             log.warning("retry %d/%d in %ds: %s", attempt + 1, _MAX_RETRIES, wait, exc)
             time.sleep(wait)
