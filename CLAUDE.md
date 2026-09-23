@@ -72,3 +72,14 @@ Data flows left to right: download, panel, signal, backtest, sweep, verdict.
 **Sweep:** `sweep.py` holds the pre-registered grid, thresholds, and target construction (`topn_targets` with `min_names` floor). `run_sweep.py` is the honesty battery runner: grid search, DSR, PBO, kill conditions, verdict output.
 
 **Selection rule:** highest train Sharpe within the instrument's sub-grid. PC-1 check compares selected config's test Sharpe against an equal-weight benchmark.
+
+## Verdict ledger
+
+Sharpes are test-period, net of the decision slip. DSR trial count in brackets.
+
+| Date | Run | Verdict | Notes |
+|---|---|---|---|
+| 2026-08-24 | spot momentum, 3 configs | FAIL | Sharpe -0.69, DSR 0.048 [3], PBO 0.767. On 720-candle OHLC data, about two years, cannot reach `TRAIN_END` |
+| 2026-08-24 | futures momentum, 3 configs | FAIL | Sharpe -0.41, DSR 0.128 [3], PBO 0.500 |
+| 2026-09-19 | 10 signals x spot + futures, 60 trials | NOT EVIDENCE | No pre-reg, DSR at N = 3, XBTUSD absent 2018-08 to 2024-09. `spot_voltrend` reads PASS on paper (Sharpe 0.39 = benchmark, maxDD 71%). Counted as spent trials only. Finding `2026-09-23-crypto-verdicts-n3-and-xbt-hole.md` |
+| 2026-09-23 | spot momentum on full trade history, 3 configs | PENDING | Pre-reg `results/crypto_spot_momentum_deep_decision_rule_2026-09-23.md`, N = 69. Runs after `scripts/check_top60_complete.py` passes |
