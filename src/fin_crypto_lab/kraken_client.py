@@ -10,8 +10,8 @@ log = logging.getLogger("fin_crypto_lab.kraken")
 BASE_URL = "https://api.kraken.com"
 FUTURES_BASE_URL = "https://futures.kraken.com"
 RATE_LIMIT_S = 1.1
-_MAX_RETRIES = 5
-_RETRY_BACKOFF = (10, 30, 60, 120, 300)
+_MAX_RETRIES = 12  # ~70 min total: outlasts an overnight WiFi drop (2026-09-24, 9 min was not enough)
+_RETRY_BACKOFF = (10, 30, 60, 120, 300, 600)
 
 
 def _get_with_retry(url: str, **kwargs) -> httpx.Response:
